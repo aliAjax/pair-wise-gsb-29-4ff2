@@ -83,7 +83,7 @@ h1 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -109,9 +109,118 @@ h1 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 360px) 1fr;
+  grid-template-columns: minmax(300px, 400px) 1fr;
   gap: 18px;
+  align-items: start;
 }
+
+.column {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+}
+
+.hint {
+  margin: 0;
+  color: #69758c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.feedback {
+  margin: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.feedback.ok { background: #e8f4ef; color: #14724f; }
+.feedback.fail { background: #fdecea; color: #b3372a; }
+
+.hot { color: #c84b31; font-weight: 700; }
+
+.status.warn { background: #fdf0e5; color: #b25b16; }
+
+.book {
+  background: #eef5fb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #445069;
+}
+
+.book p { margin: 4px 0; }
+
+.subhead {
+  margin: 18px 0 10px;
+  font-size: 16px;
+}
+
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  color: #445069;
+  font-size: 14px;
+}
+
+.version-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: #eef5fb;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  color: #445069;
+  font-size: 13px;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 32, 51, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 10;
+}
+
+.modal {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.modal h3 { margin: 0; }
+
+.conflict-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.conflict-table th,
+.conflict-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid #e7edf4;
+  color: #445069;
+  vertical-align: top;
+}
+
+.conflict-table th { color: #172033; }
 
 .panel, .list-panel {
   background: #fff;
@@ -255,6 +364,7 @@ textarea {
   .app { padding: 18px; }
   .topbar, .workspace { grid-template-columns: 1fr; }
   .stack { justify-content: flex-start; }
-  .metrics { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .details { grid-template-columns: 1fr; }
+  .conflict-table { display: block; overflow-x: auto; }
 }
