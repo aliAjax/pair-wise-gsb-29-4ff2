@@ -1,190 +1,48 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+// 界面层：页面组装（数据 / 规则 / 界面三层分离，本文件只做布局）
+import { computed, ref } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { useDeliveryStore } from "./store";
+import OrderRegister from "./components/OrderRegister.vue";
+import OrderDesk from "./components/OrderDesk.vue";
+import HandoverDesk from "./components/HandoverDesk.vue";
+import ReturnDesk from "./components/ReturnDesk.vue";
+import ConflictPanel from "./components/ConflictPanel.vue";
 
-type Field = {
-  key: string;
-  label: string;
-  type?: "number" | "date" | "select";
-  options?: readonly string[];
-};
+const store = useDeliveryStore();
+const tab = ref<"desk" | "handover" | "returns">("desk");
 
-type RecordItem = {
-  id: string;
-  status: string;
-  notes: string;
-  createdAt: string;
-  [key: string]: string | number;
-};
-
-const project = {
-  "number": 15,
-  "folder": "hxwl/frontend/hxwlfront-15",
-  "framework": "vue",
-  "title": "城市末端配送模拟",
-  "subtitle": "维护骑手和订单点位，分配附近订单到配送清单。",
-  "industry": "物流",
-  "stack": [
-    "Vue3",
-    "Vite",
-    "TypeScript",
-    "Element Plus",
-    "Leaflet"
-  ],
-  "storageKey": "hxwlfront-15-last-mile",
-  "formTitle": "新增订单点",
-  "primaryAction": "加入地图",
-  "entityLabel": "订单点",
-  "statuses": [
-    "未分配",
-    "已分配",
-    "已送达"
-  ],
-  "filters": [
-    "全部骑手",
-    "骑手A",
-    "骑手B",
-    "骑手C"
-  ],
-  "fields": [
-    {
-      "key": "rider",
-      "label": "骑手",
-      "type": "select",
-      "options": [
-        "骑手A",
-        "骑手B",
-        "骑手C"
-      ]
-    },
-    {
-      "key": "address",
-      "label": "地址"
-    },
-    {
-      "key": "distance",
-      "label": "距离km",
-      "type": "number"
-    },
-    {
-      "key": "slot",
-      "label": "配送时段"
-    }
-  ],
-  "records": [
-    {
-      "rider": "骑手A",
-      "address": "世纪大道",
-      "distance": 1.8,
-      "slot": "10:00-12:00",
-      "status": "已分配",
-      "notes": "优先配送"
-    },
-    {
-      "rider": "骑手B",
-      "address": "陆家嘴",
-      "distance": 2.4,
-      "slot": "14:00-16:00",
-      "status": "未分配",
-      "notes": "待确认"
-    }
-  ],
-  "metricLabels": [
-    "订单点",
-    "已分配",
-    "平均距离"
-  ]
-} as const;
-
-const fields = project.fields as readonly Field[];
-const statuses = [...project.statuses];
-
-function createBlank() {
-  return Object.fromEntries(fields.map((field) => [field.key, field.type === "number" ? 0 : ""]));
-}
-
-function loadRecords(): RecordItem[] {
-  const raw = localStorage.getItem(project.storageKey);
-  if (!raw) {
-    return project.records.map((record, index) => ({
-      ...record,
-      id: `seed-${index + 1}`,
-      createdAt: new Date(Date.now() - index * 86400000).toISOString()
-    })) as RecordItem[];
-  }
-  try {
-    return JSON.parse(raw) as RecordItem[];
-  } catch {
-    return [];
-  }
-}
-
-const records = ref<RecordItem[]>(loadRecords());
-const form = reactive<Record<string, string | number>>(createBlank());
-const note = ref("");
-const filter = ref(project.filters[0]);
-
-const filteredRecords = computed(() => {
-  if (filter.value.startsWith("全部")) return records.value;
-  return records.value.filter((record) => Object.values(record).includes(filter.value));
-});
+const tabs = [
+  { key: "desk", label: "到货签收" },
+  { key: "handover", label: "交班款项" },
+  { key: "returns", label: "返仓处理" }
+] as const;
 
 const metrics = computed(() => {
-  const total = records.value.length;
-  const second = records.value.filter((record) => record.status === statuses[1]).length;
-  const third = records.value.filter((record) => record.status === statuses[2]).length;
-  const numberValues = records.value.flatMap((record) =>
-    fields.filter((field) => field.type === "number").map((field) => Number(record[field.key] || 0))
-  );
-  const sum = numberValues.reduce((acc, value) => acc + value, 0);
-  return [total, second || sum, third || Math.round(sum / Math.max(total, 1))];
+  const registered = store.orders.filter((o) => o.status === "已登记").length;
+  const signed = store.orders.filter((o) => o.status === "已签收").length;
+  const openReturns = store.returns.filter((r) => r.status === "待返仓").length;
+  const riderUsage = store.riders.map((r) => `${store.riderName(r.id)} ${store.loadOfRider(r.id)}/${r.capacity}`).join(" · ");
+  return [
+    { label: "待签收订单", value: registered },
+    { label: "已签收订单", value: signed },
+    { label: "待关闭返仓单", value: openReturns, danger: openReturns > 0 },
+    { label: "骑手容量占用", value: riderUsage }
+  ];
 });
 
-const chartRows = computed(() => statuses.map((status) => ({
-  status,
-  value: records.value.filter((record) => record.status === status).length
-})));
-
-const maxChart = computed(() => Math.max(1, ...chartRows.value.map((row) => row.value)));
-
-function persist() {
-  localStorage.setItem(project.storageKey, JSON.stringify(records.value));
-}
-
-function nextStatus(status: string) {
-  const index = statuses.indexOf(status);
-  return statuses[(index + 1) % statuses.length];
-}
-
-function primaryText(record: RecordItem) {
-  const first = fields[0];
-  const second = fields[1];
-  return [record[first.key], record[second.key]].filter(Boolean).join(" / ") || project.entityLabel;
-}
-
-function submit() {
-  records.value = [
-    {
-      ...form,
-      id: crypto.randomUUID(),
-      status: statuses[0],
-      notes: note.value || "暂无备注",
-      createdAt: new Date().toISOString()
-    } as RecordItem,
-    ...records.value
-  ];
-  Object.assign(form, createBlank());
-  note.value = "";
-  persist();
-}
-
-function flow(record: RecordItem) {
-  record.status = nextStatus(record.status);
-  persist();
-}
-
-function remove(id: string) {
-  records.value = records.value.filter((record) => record.id !== id);
-  persist();
+async function resetAll() {
+  try {
+    await ElMessageBox.confirm("将清空当前数据并恢复演示数据，确定继续？", "重置数据", {
+      confirmButtonText: "重置",
+      cancelButtonText: "取消",
+      type: "warning"
+    });
+  } catch {
+    return;
+  }
+  const result = store.resetAll();
+  ElMessage.success(result.message);
 }
 </script>
 
@@ -193,78 +51,58 @@ function remove(id: string) {
     <div class="shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">{{ project.industry }}行业前端最小闭环</p>
-          <h1>{{ project.title }}</h1>
-          <p class="subtitle">{{ project.subtitle }}</p>
+          <p class="eyebrow">物流行业前端最小闭环</p>
+          <h1>城市末端配送模拟 · 到货签收与代收款交接台</h1>
+          <p class="subtitle">
+            订单登记应收款与温区上限；到货现金/电子支付对平方可签收，差额须挂账；
+            超温只能拒收生成返仓单，未关闭持续占用原骑手与站点容量；签收留付款快照，复签带原因出新版本。
+          </p>
         </div>
         <div class="stack">
-          <span v-for="item in project.stack" :key="item" class="tag">{{ item }}</span>
+          <span class="tag">Vue3</span>
+          <span class="tag">Pinia</span>
+          <span class="tag">TypeScript</span>
+          <span class="tag">Element Plus</span>
+          <button class="secondary reset-btn" type="button" @click="resetAll">重置演示数据</button>
         </div>
       </header>
 
       <section class="metrics">
-        <article v-for="(label, index) in project.metricLabels" :key="label" class="metric">
-          <span>{{ label }}</span>
-          <strong>{{ metrics[index] }}</strong>
+        <article v-for="m in metrics" :key="m.label" class="metric" :class="{ danger: m.danger }">
+          <span>{{ m.label }}</span>
+          <strong>{{ m.value }}</strong>
         </article>
       </section>
 
-      <section class="workspace">
-        <form class="panel" @submit.prevent="submit">
-          <h2>{{ project.formTitle }}</h2>
-          <div class="form-grid">
-            <label v-for="field in fields" :key="field.key">
-              {{ field.label }}
-              <select v-if="field.type === 'select'" v-model="form[field.key]" required>
-                <option value="">请选择</option>
-                <option v-for="option in field.options" :key="option">{{ option }}</option>
-              </select>
-              <input v-else v-model="form[field.key]" :type="field.type || 'text'" required />
-            </label>
-            <label>
-              备注
-              <textarea v-model="note" placeholder="填写处理说明或现场备注" />
-            </label>
-            <button type="submit">{{ project.primaryAction }}</button>
-          </div>
-        </form>
+      <nav class="tabs">
+        <button
+          v-for="t in tabs"
+          :key="t.key"
+          type="button"
+          class="tab"
+          :class="{ active: tab === t.key }"
+          @click="tab = t.key"
+        >
+          {{ t.label }}
+        </button>
+      </nav>
 
-        <section class="list-panel">
-          <div class="toolbar">
-            <h2>{{ project.entityLabel }}列表</h2>
-            <select v-model="filter">
-              <option v-for="item in project.filters" :key="item">{{ item }}</option>
-            </select>
-          </div>
-
-          <div class="record-grid">
-            <div v-if="filteredRecords.length === 0" class="empty">暂无匹配数据</div>
-            <article v-for="record in filteredRecords" :key="record.id" class="record">
-              <div class="record-head">
-                <p class="record-title">{{ primaryText(record) }}</p>
-                <span class="status">{{ record.status }}</span>
-              </div>
-              <div class="details">
-                <span v-for="field in fields" :key="field.key">{{ field.label }}: {{ record[field.key] }}</span>
-              </div>
-              <p class="note">{{ record.notes }}</p>
-              <div class="actions">
-                <button type="button" @click="flow(record)">流转状态</button>
-                <button class="secondary" type="button" @click="navigator.clipboard?.writeText(primaryText(record))">复制摘要</button>
-                <button class="danger" type="button" @click="remove(record.id)">删除</button>
-              </div>
-            </article>
-          </div>
-
-          <div class="mini-chart">
-            <div v-for="row in chartRows" :key="row.status" class="bar">
-              <span>{{ row.status }}</span>
-              <div class="bar-track"><div class="bar-fill" :style="{ width: `${(row.value / maxChart) * 100}%` }" /></div>
-              <strong>{{ row.value }}</strong>
-            </div>
-          </div>
-        </section>
+      <section v-if="tab === 'desk'" class="workspace">
+        <OrderRegister />
+        <OrderDesk />
       </section>
+      <section v-else-if="tab === 'handover'" class="workspace wide-left">
+        <HandoverDesk />
+      </section>
+      <section v-else class="workspace wide-left">
+        <ReturnDesk />
+      </section>
+
+      <ConflictPanel class="conflict-wrap" />
+
+      <footer class="foot">
+        数据保存在浏览器 localStorage（刷新后订单、款项、返仓单与版本一致）；业务规则全部集中在 src/rules，界面只负责交互。
+      </footer>
     </div>
   </main>
 </template>
